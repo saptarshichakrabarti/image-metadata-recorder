@@ -1,0 +1,4 @@
+tifffile
+pypandoc
+xmltodict
+aicspylibczi
