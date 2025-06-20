@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # This section contains all the metadata about your package.
 [project]
 name = "image-metadata-recorder"
-version = "1.2.0"
+version = "1.2.1"
 description = "A tool to extract, analyze, and report on metadata from TIFF, QPTIFF, and CZI files."
 authors = [
     { name="Saptarshi Chakrabarti", email="saptarshi.chakrabarti@kuleuven.be" },
@@ -37,10 +37,10 @@ dependencies = [
 
 # Project URLs
 [project.urls]
-Homepage = "https://github.com/yourusername/image-metadata-recorder"
-Documentation = "https://github.com/yourusername/image-metadata-recorder#readme"
-Repository = "https://github.com/yourusername/image-metadata-recorder.git"
-Issues = "https://github.com/yourusername/image-metadata-recorder/issues"
+Homepage = "https://github.com/saptarshichakrabarti/image-metadata-recorder"
+Documentation = "https://github.com/saptarshichakrabarti/image-metadata-recorder#readme"
+Repository = "https://github.com/saptarshichakrabarti/image-metadata-recorder.git"
+Issues = "https://github.com/saptarshichakrabarti/image-metadata-recorder/issues"
 
 # Development dependencies
 [project.optional-dependencies]
