@@ -6,15 +6,8 @@ build-backend = "setuptools.build_meta"
 # This section contains all the metadata about your package.
 [project]
 name = "image-metadata-recorder"
-version = "1.1.0"
+version = "1.2.0"
 description = "A tool to extract, analyze, and report on metadata from TIFF, QPTIFF, and CZI files."
-long_description = """
-A comprehensive tool for biomedical image metadata processing that supports:
-- TIFF and QPTIFF file metadata extraction
-- CZI file metadata extraction and parsing
-- Automated report generation in Markdown and PDF formats
-- Metadata structure analysis and template generation
-"""
 authors = [
     { name="Saptarshi Chakrabarti", email="saptarshi.chakrabarti@kuleuven.be" },
 ]
@@ -35,6 +28,12 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Intended Audience :: Healthcare Industry",
 ]
+dependencies = [
+    "tifffile>=2023.0.0",      # For TIFF/QPTIFF processing
+    "pypandoc>=1.11",          # For PDF report generation
+    "aicspylibczi>=3.0.0",     # For CZI file support
+    "xmltodict>=0.13.0",       # For CZI XML parsing
+]
 
 # Project URLs
 [project.urls]
@@ -42,14 +41,6 @@ Homepage = "https://github.com/yourusername/image-metadata-recorder"
 Documentation = "https://github.com/yourusername/image-metadata-recorder#readme"
 Repository = "https://github.com/yourusername/image-metadata-recorder.git"
 Issues = "https://github.com/yourusername/image-metadata-recorder/issues"
-
-# Dependencies
-dependencies = [
-    "tifffile>=2023.0.0",      # For TIFF/QPTIFF processing
-    "pypandoc>=1.11",          # For PDF report generation
-    "aicspylibczi>=3.0.0",     # For CZI file support
-    "xmltodict>=0.13.0",       # For CZI XML parsing
-]
 
 # Development dependencies
 [project.optional-dependencies]
