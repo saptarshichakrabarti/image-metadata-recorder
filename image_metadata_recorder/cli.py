@@ -1,177 +1,173 @@
 #!/usr/bin/env python3
-"""Command-line interface for the metadata workflow tool.
+"""
+Command-line interface for the image-metadata-recorder.
 
-This module provides the main entry point for the metadata workflow tool,
-handling command-line arguments, file discovery, and orchestrating the
-metadata extraction, analysis, and reporting workflow.
-
-Typical usage:
-    $ metadata-workflow
-    $ metadata-workflow --skip-pdf
+This module provides the main entry point for the tool, handling
+command-line arguments, discovering files, and orchestrating the
+metadata extraction, normalization, and reporting workflow by calling
+the `run_for_file` orchestrator.
 """
 
-import os
-import json
-import glob
-import sys
-import shutil
 import argparse
-from typing import List, Optional
+import logging
+import sys
+from pathlib import Path
+from typing import List
 
-# Import functions from our package
-from image_metadata_recorder.extractor import extract_metadata_from_tiff, extract_metadata_from_czi
-from image_metadata_recorder.analyzer import get_key_paths, generate_structure_template
-from image_metadata_recorder.reporter import create_markdown_report, create_pdf_report
+# Import the main workflow orchestrator
+from image_metadata_recorder.workflow import workflow
 
-def check_dependencies() -> bool:
-    """Check for required libraries and external tools.
+# Supported file extensions (case-insensitive for matching)
+SUPPORTED_EXTENSIONS = [".tiff", ".tif", ".qptiff", ".czi"]
 
-    Verifies that all required Python packages are installed and that
-    optional tools (like pandoc) are available if needed.
 
-    Returns:
-        bool: True if pandoc is available, False otherwise.
-
-    Raises:
-        SystemExit: If any required dependencies are missing.
-    """
-    print("--- Performing pre-flight dependency checks... ---")
-    try:
-        import tifffile
-        import aicspylibczi
-        import xmltodict
-    except ImportError as e:
-        print(
-            f"Error: A required Python library is missing: {e.name}",
-            file=sys.stderr
-        )
-        print(
-            "Please update dependencies from pyproject.toml / requirements.txt",
-            file=sys.stderr
-        )
-        sys.exit(1)
-
-    has_pandoc = False
-    try:
-        import pypandoc
-        if shutil.which("pandoc") is not None:
-            has_pandoc = True
-    except ImportError:
-        pass  # pypandoc is optional
-
-    print("Dependencies checked.")
-    return has_pandoc
-
-def find_supported_files() -> List[str]:
-    """Find all supported image files in the current directory.
-
-    Returns:
-        A list of file paths for supported image formats (.tiff, .qptiff, .czi).
-    """
-    return (
-        glob.glob("*.qptiff") +
-        glob.glob("*.tiff") +
-        glob.glob("*.czi")
+def setup_logging(log_level_str: str = "INFO") -> None:
+    """Configures basic logging for the application."""
+    log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-def process_file(
-    image_file: str,
-    skip_pdf: bool,
-    has_pandoc: bool
-) -> None:
-    """Process a single image file through the metadata workflow.
 
-    This function handles the complete workflow for a single file:
-    1. Metadata extraction
-    2. Analysis and template generation
-    3. Report generation (Markdown and optionally PDF)
+
+def find_files(target_path_str: str) -> List[Path]:
+    """
+    Finds all supported image files in the given path (file or directory).
 
     Args:
-        image_file: Path to the image file to process.
-        skip_pdf: Whether to skip PDF report generation.
-        has_pandoc: Whether pandoc is available for PDF generation.
+        target_path_str: A path to a single file or a directory.
+
+    Returns:
+        A list of Path objects for supported image files.
+        Returns an empty list if no supported files are found or path is invalid.
     """
-    print(f"\n--- Processing: {image_file} ---")
-    base_name = os.path.splitext(image_file)[0]
-    metadata_dict = None
-    is_tiff = False
+    target_path = Path(target_path_str)
+    found_files: List[Path] = []
 
-    # Extract metadata based on file type
-    if image_file.lower().endswith(('.tiff', '.qptiff')):
-        is_tiff = True
-        metadata_dict = extract_metadata_from_tiff(image_file)
-        with open(f"{base_name}_metadata.json", 'w') as f:
-            json.dump(metadata_dict, f, indent=4)
-        print(f"  -> Saved TIFF metadata to '{base_name}_metadata.json'")
+    if not target_path.exists():
+        logging.error(f"Input path does not exist: {target_path_str}")
+        return found_files
 
-    elif image_file.lower().endswith('.czi'):
-        metadata_dict = extract_metadata_from_czi(image_file)
-        with open(f"{base_name}_full_metadata.json", 'w') as f:
-            json.dump(metadata_dict, f, indent=2)
-        print(f"  -> Saved CZI metadata to '{base_name}_full_metadata.json'")
-
-    # Analyze metadata if extraction was successful
-    if metadata_dict:
-        key_paths = get_key_paths(metadata_dict)
-        with open(f"{base_name}_key_paths.txt", 'w') as f:
-            f.write("\n".join(sorted(key_paths)))
-
-        structure_template = generate_structure_template(key_paths)
-        with open(f"{base_name}_structure_template.txt", 'w') as f:
-            f.write("\n".join(structure_template))
-        print(f"  -> Saved analysis files (keys and structure).")
-
-        # Generate reports for TIFF files
-        if is_tiff:
-            md_content = create_markdown_report(metadata_dict)
-            md_filename = f"{base_name}_report.md"
-            with open(md_filename, 'w') as f:
-                f.write(md_content)
-            print(f"  -> Saved Markdown report for TIFF file.")
-
-            if not skip_pdf and has_pandoc:
-                create_pdf_report(md_filename, f"{base_name}_report.pdf")
+    if target_path.is_file():
+        if target_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            found_files.append(target_path.resolve())
         else:
-            print("  -> Reporting for this file type is not yet implemented.")
+            logging.warning(
+                f"Specified file is not a supported type: {target_path.name}. "
+                f"Supported types: {', '.join(SUPPORTED_EXTENSIONS)}"
+            )
+    elif target_path.is_dir():
+        logging.info(f"Scanning directory: {target_path_str} for supported files...")
+        for ext in SUPPORTED_EXTENSIONS:
+            # Search for both lowercase and uppercase extensions if OS is case-sensitive
+            found_files.extend(target_path.glob(f"*{ext}"))
+            if ext.lower() != ext.upper():  # e.g. for .tif vs .TIF
+                found_files.extend(target_path.glob(f"*{ext.upper()}"))
+
+        # Resolve paths and filter unique files in case of case-insensitive globbing on some systems
+        # or duplicate patterns (e.g. .tif and .tiff potentially matching same files)
+        unique_resolved_files = sorted(list(set(f.resolve() for f in found_files)))
+
+        # Final filter by suffix just to be sure glob didn't pick up something odd
+        found_files = [
+            f for f in unique_resolved_files if f.suffix.lower() in SUPPORTED_EXTENSIONS
+        ]
+
+        logging.info(f"Found {len(found_files)} supported files in {target_path_str}.")
+    else:
+        logging.error(f"Input path is not a file or directory: {target_path_str}")
+
+    return found_files
+
 
 def main() -> None:
-    """Main entry point for the metadata workflow tool.
-
-    This function:
-    1. Parses command-line arguments
-    2. Checks for required dependencies
-    3. Finds supported image files
-    4. Processes each file through the workflow
+    """
+    Main entry point for the image-metadata-recorder CLI.
+    Parses arguments, sets up logging, finds files, and calls the workflow orchestrator.
     """
     parser = argparse.ArgumentParser(
-        description="A modular workflow for image metadata extraction and analysis."
+        description="Extracts, normalizes, and reports metadata from microscopy image files."
     )
     parser.add_argument(
-        '--skip-pdf',
-        action='store_true',
-        help="Skip PDF generation for supported formats."
+        "input_path",
+        type=str,
+        help="Path to an image file or a directory containing image files.",
     )
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=str,
+        default="metadata_output",
+        help="Directory to save output files (default: 'metadata_output' in current dir).",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level (default: INFO).",
+    )
+
     args = parser.parse_args()
 
-    has_pandoc = check_dependencies()
+    setup_logging(args.log_level)
 
-    # Find and process supported files
-    image_files = find_supported_files()
-    if not image_files:
-        print(
-            "No supported image files (.tiff, .qptiff, .czi) "
-            "found in the current directory."
+    files_to_process = find_files(args.input_path)
+
+    if not files_to_process:
+        logging.info(
+            f"No supported image files found at path: {args.input_path}. Exiting."
         )
-        return
+        sys.exit(0)  # Not necessarily an error if path was valid but empty of targets
 
-    print(f"\nFound {len(image_files)} image files to process.")
+    output_directory = Path(args.output_dir)
+    try:
+        output_directory.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Output will be saved to: {output_directory.resolve()}")
+    except OSError as e:
+        logging.error(f"Could not create output directory {output_directory}: {e}")
+        sys.exit(1)
 
-    for image_file in image_files:
-        process_file(image_file, args.skip_pdf, has_pandoc)
+    logging.info(f"Found {len(files_to_process)} image file(s) to process.")
 
-    print("\n==========================")
-    print("    Workflow Complete!    ")
-    print("==========================")
+    success_count = 0
+    failure_count = 0
+
+    for image_file_path in files_to_process:
+        logging.info(f"--- Starting processing for: {image_file_path.name} ---")
+        try:
+            # Ensure file path is absolute string for run_for_file
+            workflow.run_for_file(
+                filepath_str=str(image_file_path.resolve()),
+                output_dir_str=str(output_directory.resolve()),
+            )
+            logging.info(f"--- Finished processing for: {image_file_path.name} ---")
+            success_count += 1
+        except Exception as e:
+            logging.error(
+                f"!!! Critical error during workflow for {image_file_path.name}: {e} !!!",
+                exc_info=True,  # Print stack trace for unexpected errors at this level
+            )
+            failure_count += 1
+            # Optionally, create a specific error file for this top-level failure
+            error_file = output_directory / f"{image_file_path.stem}_WORKFLOW_ERROR.txt"
+            with open(error_file, "w") as f_err:
+                f_err.write(
+                    f"A critical error occurred processing {image_file_path.name}:\n{e}\n"
+                )
+                f_err.write("Check logs for more details.")
+
+    logging.info("\n===================================================")
+    logging.info("              Batch Processing Complete!             ")
+    logging.info(f"  Successfully processed: {success_count} file(s)")
+    logging.info(f"  Failed to process:    {failure_count} file(s)")
+    logging.info("===================================================")
+
+    if failure_count > 0:
+        sys.exit(1)  # Indicate that some operations failed
+
 
 if __name__ == "__main__":
     main()

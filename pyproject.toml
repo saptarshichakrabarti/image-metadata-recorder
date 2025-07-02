@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # This section contains all the metadata about your package.
 [project]
 name = "image-metadata-recorder"
-version = "1.2.1"
+version = "1.3.0"
 description = "A tool to extract, analyze, and report on metadata from TIFF, QPTIFF, and CZI files."
 authors = [
     { name="Saptarshi Chakrabarti", email="saptarshi.chakrabarti@kuleuven.be" },
@@ -30,7 +30,6 @@ classifiers = [
 ]
 dependencies = [
     "tifffile>=2023.0.0",      # For TIFF/QPTIFF processing
-    "pypandoc>=1.11",          # For PDF report generation
     "aicspylibczi>=3.0.0",     # For CZI file support
     "xmltodict>=0.13.0",       # For CZI XML parsing
 ]
@@ -55,3 +54,12 @@ dev = [
 # Command-line script entry point
 [project.scripts]
 record_image_metadata = "image_metadata_recorder.cli:main"
+
+[project.entry-points."image_metadata_recorder.extractors"]
+# This section allows other packages to register their extractors.
+# Example:
+# another_format_extractor = "another_package.extractors:extract_another_format"
+#
+# The built-in extractors will be registered programmatically in __init__.py
+# to ensure they are always available, but this entry point group is for
+# third-party plugins.
